@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Ant-Version: Apache Ant(TM) version 1.8.2
+Created-By: Stephen Copp (TM) 2008
+Main-Class: com.copp.jmeter.ProcessJmeterResults
+Class-Path: lib/log4j-1.2.15.jar lib/commons-math-1.2.jar lib/ojdbc14_g_10g.jar

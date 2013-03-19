@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/">
+
+	<appender name="STDOUT" class="org.apache.log4j.ConsoleAppender">
+		<layout class="org.apache.log4j.PatternLayout">
+		<param name="ConversionPattern" value="- %m%n"/>
+		</layout>
+	</appender>	
+
+	<!-- DO NOT REMOVE THIS APPENDER - 
+		 IT IS REQUIRED FOR THE ProcessJmeterResults Logger -->
+	<appender name="PROCESS_JMETER_RESULTS" class="org.apache.log4j.FileAppender">
+		<param name="File" value="/tmp/jmeter.results.out" />
+		<param name="Threshold" value="debug" />
+		<param name="Append" value="false" />
+		<layout class="org.apache.log4j.PatternLayout">
+			<param name="ConversionPattern" value="- %m%n"/>
+		</layout>
+	</appender>
+
+	<logger name="com.copp.jmeter.ProcessJmeterResults">
+		<level value="info"/>
+		<!--<appender-ref ref="STDOUT"/>-->
+		<appender-ref ref="PROCESS_JMETER_RESULTS"/>
+	</logger>
+
+	<logger name="com.copp.jmeter">
+		<level value="info"/>
+		<appender-ref ref="STDOUT"/>
+	</logger>
+</log4j:configuration>

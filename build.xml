@@ -1,0 +1,523 @@
+<project name="BuildPerformanceTools" default="init">
+	<!-- import AntContrib ant-contrib-0.6.jar needs to be placed in $ANT_HOME/lib -->
+	<taskdef resource="net/sf/antcontrib/antlib.xml"/>
+
+	<!-- import AntJMeter ant-jmeter-x.x.x.jar needs to be placed in $ANT_HOME/lib -->
+	<taskdef name="jmeter" classname="org.programmerplanet.ant.taskdefs.jmeter.JMeterTask" />
+
+	<!-- global variables -->
+	<property file="build.properties"/>
+	<property file="${basedir}/conf/environment.properties"/>
+	<property file="${basedir}/conf/test.properties"/>
+	<property name="src"			location="${basedir}/src"/>
+	<property name="bin"			location="${basedir}/bin"/>
+	<property name="lib"			location="${basedir}/lib"/>
+	<property name="conf"			location="${basedir}/conf"/>
+	<property name="scripts"		location="${basedir}/scripts"/>
+	<property name="utils"			location="${basedir}/utils"/>
+	<property name="lnp.host"		value="test01.stephencopp.com"/>
+	<fail message="You need to pass in -Denvironment= parameter!">
+		<condition>
+			<not>
+				<isset property="environment"/>
+			</not>
+		</condition>
+	</fail>
+	<property environment="env"/>
+	<property name="java.home"		location="${env.JAVA_HOME}"/>
+	<property name="ant.home"		location="${env.ANT_HOME}"/>
+	<property name="jmeter.home"	location="/opt/jmeter/"/>
+	<property name="jmeter.results"	location="${basedir}/test.results"/>
+	<property name="jmeter.archive"	location="${basedir}/jmeter.archive"/>
+	<property name="tests.dir"		location="${basedir}/tests"/>
+	<tstamp>
+		<format property="touch.time" pattern="yyyyMMdd.HHmmss"/>
+	</tstamp>
+
+	<!-- ant classpath -->
+	<path id="ant" description="classpath for jmeter ant task">
+		<fileset dir="${ant.home}/lib">
+			<include name="**/*.jar"/>
+		</fileset>
+	</path>
+
+	<!-- jmeter classpath -->
+	<path id="jmeter.classpath" description="classpath for jmeter results processor">
+		<fileset dir="${lib}">
+			
+			<include name="**/*.jar"/>
+			<exclude name="**/fit*"/>
+		</fileset>
+	</path>
+
+	<!-- print some init values -->
+	<target name="init" description="print out system information">
+		<echo>       Timestamp: ${touch.time}</echo>
+		<echo>   Build project: ${ant.project.name}</echo>
+		<echo>    Java version: ${java.version}</echo>
+		<echo>     Ant version: ${ant.version}</echo>
+		<echo>       JAVA_HOME: ${java.home}</echo>
+		<echo>        ANT_HOME: ${ant.home}</echo>
+		<echo>     JMETER_HOME: ${jmeter.home}</echo>
+		<echo>Operating System: ${os.name} ${os.arch} ${os.version}</echo>
+		<echo>  Jmeter Results: ${jmeter.results}</echo>
+		<echo>  Jmeter Archive: ${jmeter.archive}</echo>
+		<echo>           Tests: ${tests.dir}</echo>
+	</target>
+
+	<!-- remove the bin directory -->
+	<target name="clean">
+		<delete dir="${bin}"/>
+	</target>
+
+	<!-- compile all source files -->
+	<target name="compile" depends="clean" description="compile the source " >
+		<echo>compiling source in ${src}</echo>
+		<mkdir dir="${bin}"/>
+		<javac srcdir="${src}" destdir="${bin}" debug="on" debuglevel="lines,vars,source" 
+			includes="com/copp/jmeter/*.java" includeantruntime="false">
+			<classpath refid="jmeter.classpath"/>
+		</javac>
+	</target>
+
+	<!-- create directories for jar -->
+	<target name="create-lib-directories" depends="compile" description="create necessary lib directories">
+		<mkdir dir="${builder.output.dir}/lib"/>
+	</target>
+
+	<!-- copy libraries defined by builder.libraries to lib/ -->
+	<target name="copy-files-for-jar" depends="create-lib-directories" description="copy needed files to lib directory for jar">
+		<for list="${builder.libraries}" param="file" >
+			<sequential>
+				<copy file="@{file}" todir="${builder.output.dir}/lib"/>
+			</sequential>
+		</for>
+	</target>
+
+	<!-- build the executable jar file -->
+	<target name="jar" depends="init,copy-files-for-jar" description="jar the contents up">
+		<jar destfile="${builder.output.dir}/${builder.jar.destination-file}" manifest="${conf}/MANIFEST.MF">
+			<fileset dir="${bin}" includes="${builder.package}**/*.class"/>
+			<fileset dir="${conf}" includes="log4j.xml"/>
+			<fileset dir="${conf}" includes="db.properties"/>
+		</jar>
+	</target>
+
+	<!-- delete old test result files -->
+	<target name="clean.tmp.files" description="deletes old tmp test files">
+		<echo message="Cleaning old results and tmp test files" />
+		<if>
+			<available file="${jmeter.results}" type="dir"/>
+			<then>
+				<delete includeemptydirs="true">
+					<fileset dir="${jmeter.results}"/>
+				</delete>
+			</then>
+		</if>
+		<mkdir dir="${jmeter.results}"/>
+	</target>
+
+	<!-- **********************************************************************************
+	*************************************** LOAD TESTS ************************************
+	*********************************************************************************** -->
+	<target name="run.nightly.perf.tests" depends="define.perf.variables,start.db.snapshot,run.load.tests,stop.db.snapshot,generate.db.snapshot.report,process.and.log.jmeter.results" description="kick off jmeter tests and process results" />
+	<target name="run.perf.tests" depends="define.perf.variables,run.load.tests,process.jmeter.results" description="kick off jmeter tests, do not process results" />
+	<target name="run.stress.tests" depends="init,define.perf.variables,env.restarts,run.nightly.perf.tests" description="kick off nightly jmeter tests but include restarts" />
+
+	<!--*********************************
+	**** define performance variables****
+	**********************************-->
+	<target name="define.perf.variables" depends="init" description="defines variables for perf tests">
+		<property name="test.type"			value="perf"/>
+		<property name="jmeter.heap"		value="-Xmx2048m"/>
+		<property name="constant.wait"		value="1500"/>
+		<property name="num.threads"		value="75"/>
+		<property name="throughput"			value="0"/>
+		<property name="ramp.time"			value="300"/>
+		<property name="duration"			value="3600"/>
+		<property name="loop"				value="-1"/>
+		<property name="input.path"			value="${tests.dir}/input/"/>
+
+		<propertycopy name="server" 			from="${environment}.server"/>
+		<propertycopy name="port"				from="${environment}.port"/>
+		<propertycopy name="db.server"			from="${environment}.db.server"/>
+		<propertycopy name="db.user"			from="${environment}.db.user"/>
+		<propertycopy name="db.password"		from="${environment}.db.password"/>
+		<propertycopy name="db.id"				from="${environment}.db.id"/>
+		<propertycopy name="db.snapshot.url"	from="${environment}.db.snapshot.url"/>
+		<propertycopy name="fitnesse.page"		from="${environment}.fitnesse.page"/>
+
+		<echo message="     Environment: ${environment}" />
+		<echo message="       Test Type: ${test.type}" />
+		<echo message="     JMeter Heap: ${jmeter.heap}" />
+		<echo message=" -Dconstant.wait: ${constant.wait}" />
+		<echo message="   -Dnum.threads: ${num.threads}" />
+		<echo message="    -Dthroughput: ${throughput} --- Keep this at zero" />
+		<echo message="     -Dramp.time: ${ramp.time}" />
+		<echo message="      -Dduration: ${duration}" />
+		<echo message="          -Dloop: ${loop}" />
+		<echo message="     Test Server: ${server}" />
+		<echo message="       Test Port: ${port}" />
+		<echo message="       DB server: ${db.server}" />
+		<echo message="         DB User: ${db.user}" />
+		<echo message="         DB Pass: ${db.password}" />
+		<echo message="           DB Id: ${db.id}" />
+		<echo message="   Fitnesse Page: ${fitnesse.page}" />
+		<echo message="      Input Path: ${input.path}" />
+	</target>
+
+	<!--*******************************
+	****gets startId of db snapshot****
+	********************************-->
+	<target name="start.db.snapshot" description="gets start id of snapshot">
+		<if>
+			<not><equals arg1="${db.id}" arg2=""/></not>
+			<then>
+				<sql
+					driver="oracle.jdbc.driver.OracleDriver"
+					url="jdbc:oracle:thin:@${db.server}"
+					userid="${db.user}"
+					password="${db.password}"
+					classpathref="jmeter.classpath"
+					showheaders="false"
+					showtrailers="false"
+					print="yes"
+					output="/tmp/startSnapId.out">
+					select DBMS_WORKLOAD_REPOSITORY.CREATE_SNAPSHOT() from dual;
+				</sql>
+				<loadfile srcfile="/tmp/startSnapId.out" property="startId">
+					<filterchain>
+						<headfilter lines="1"/>
+						<striplinebreaks/>
+					</filterchain>
+				</loadfile>
+				<echo>Snapshot startId: ${startId}</echo>
+			</then>
+			<else>
+				<echo message="Environment ${environment} does not have a db.id defined, skipping db snaphot..." />
+			</else>
+		</if>
+	</target>
+
+	<!--********************
+	****run jmeter tests****
+	*********************-->
+	<target name="run.load.tests" depends="clean.tmp.files" description="launch jmeter load tests">
+		<property name="test.results" value="${jmeter.archive}/${environment}.${test.type}.${num.threads}users.results.${touch.time}.jtl"/>
+		<jmeter
+			jmeterhome="${jmeter.home}"
+			resultlog="${test.results}">
+			<testplans dir="${tests.dir}" includes="Master-Perf.jmx"/>
+			<property name="duration" value="${duration}"/>
+			<jvmarg value="${jmeter.heap}"/>
+			<property name="server" value="${server}"/>
+			<property name="port" value="${port}"/>
+			<property name="db-server" value="${db.server}"/>
+			<property name="db-user" value="${db.user}"/>
+			<property name="db-pass" value="${db.password}"/>
+			<property name="num-threads" value="${num.threads}"/>
+			<property name="constant-wait" value="${constant.wait}"/>
+			<property name="throughput" value="${throughput}"/>
+			<property name="ramp-time" value="${ramp.time}"/>
+			<property name="loop" value="${loop}"/>
+			<property name="fitnesse-page" value="${fitnesse.page}"/>
+			<property name="input-path" value="${input.path}"/>
+		</jmeter>
+
+		<copy file="${test.results}" tofile="${jmeter.results}/${environment}.${test.type}.results.jtl"/>
+	</target>
+
+	<!--******************************
+	****gets stopId of db snapshot****
+	*******************************-->
+	<target name="stop.db.snapshot" description="gets stop id of snapshot">
+		<if>
+			<not><equals arg1="${db.id}" arg2=""/></not>
+			<then>
+				<sql
+					driver="oracle.jdbc.driver.OracleDriver"
+					url="jdbc:oracle:thin:@${db.server}"
+					userid="${db.user}"
+					password="${db.password}"
+					classpathref="jmeter.classpath"
+					showheaders="false"
+					showtrailers="false"
+					print="yes"
+					output="/tmp/stopSnapId.out">
+					select DBMS_WORKLOAD_REPOSITORY.CREATE_SNAPSHOT() from dual;
+				</sql>
+				<loadfile srcfile="/tmp/stopSnapId.out" property="stopId">
+					<filterchain>
+						<headfilter lines="1"/>
+						<striplinebreaks/>
+					</filterchain>
+				</loadfile>
+				<echo>Snapshot stopId: ${stopId}</echo>
+			</then>
+			<else>
+				<echo message="Environment ${environment} does not have a db.id defined, skipping db snaphot..." />
+			</else>
+		</if>
+	</target>
+
+	<!--******************************************************************
+	****creates html report of db snapshot for moment-in-time analysis****
+	*******************************************************************-->
+	<target name="generate.db.snapshot.report" description="generates db snapshot report">
+		<if>
+			<not><equals arg1="${db.id}" arg2=""/></not>
+			<then>
+				<sql
+					driver="oracle.jdbc.driver.OracleDriver"
+					url="jdbc:oracle:thin:@${db.server}"
+					userid="${db.user}"
+					password="${db.password}"
+					classpathref="jmeter.classpath"
+					print="yes"
+					output="/tmp/dbSnapshot.out">
+					select output from table(dbms_workload_repository.awr_report_html(${db.id},1,${startId},${stopId},0));
+				</sql>
+
+				<property name="db.snapshot.report" value="${jmeter.archive}/${project}.${test.type}.${num.threads}users.DBresults.${touch.time}.html"/>
+				<copy file="/tmp/dbSnapshot.out" tofile="${db.snapshot.report}">
+					<filterchain>
+						<tokenfilter>
+							<replaceregex pattern="\),SYS.AWRRPT_HTML_TYPE\(" replace="" flags="gi"/>
+							<replaceregex pattern="SYS.AWRRPT_HTML_TYPE\(" replace="" flags="gi"/>
+							<replaceregex pattern="End of Report" replace="" flags="gi"/>
+						</tokenfilter>
+					</filterchain>
+				</copy>
+				<var name="db.snapshot.url" value="http://{lnp.host}:8080/graph/performance/snapshots/${project}.${test.type}.${num.threads}users.DBresults.${touch.time}.html"/>
+				<echo message="Created DB snapshot HTML at: ${db.snapshot.url}" />
+			</then>
+			<else>
+				<echo message="Environment ${environment} does not have a db.id defined, skipping db snaphot..." />
+			</else>
+		</if>
+	</target>
+
+	<!--*********************************************
+	****process and log perf jmeter results to db****
+	**********************************************-->
+	<target name="process.and.log.jmeter.results" depends="jar" description="process and log jmeter results to database">
+		<java jar="${builder.output.dir}/${builder.jar.destination-file}" fork="true">
+			<arg value="${test.results}"/>
+			<arg value="${constant.wait}"/>
+			<arg value="${num.threads}"/>
+			<arg value="${environment}"/>
+			<arg value="${test.type}"/>
+			<arg value="${db.snapshot.url}"/>
+			<arg value="${proj}"/>
+		</java>
+		
+<!--&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+##############################################################################
+TODO proj
+-->
+		<scp file="${test.results}.out" trust="true"
+			todir="cdc-ops:brainsB4@${lnp.host}:${jmeter.archive}/perf.snapshots"/>
+		<if>
+			<not><equals arg1="${db.id}" arg2=""/></not>
+			<then>
+				<scp file="${db.snapshot.report}" trust="true"
+					todir="cdc-ops:brainsB4@${lnp.host}:${jmeter.archive}/perf.snapshots"/>
+				<echo message="***********************************"/>
+				<echo message="Created DB snapshot HTML at: ${db.snapshot.url}" />
+				<echo message="***********************************"/>
+			</then>
+		</if>
+	</target>
+
+	<!--*******************************
+	****process perf jmeter results****
+	********************************-->
+	<target name="process.jmeter.results" depends="jar" description="process jmeter results">
+		<java jar="${builder.output.dir}/${builder.jar.destination-file}" fork="true">
+			<arg value="${test.results}"/>
+			<arg value="${constant.wait}"/>
+		</java>
+		<scp file="${test.results}.out" trust="true"
+			todir="cdc-ops:brainsB4@${lnp.host}:${jmeter.archive}/perf.snapshots"/>
+	</target>
+
+	<!--***********************************
+	****rebuildDB and restart weblogics****
+	************************************-->
+	<target name="env.restarts" description="do any restarts in between tests">
+<!--		<jmeter
+			jmeterhome="${jmeter.home}"
+			resultlog="${jmeter.archive}/rebuildDb.results.${touch.time}.jtl">
+			<testplans dir="${utils}" includes="rebuildDB.jmx"/>
+		</jmeter>-->
+
+		<sshexec host="${server}"
+			trust="true"
+			username="vidadmin"
+			keyfile="/home/qaperf/.ssh/id_rsa"
+			command="bash -c &quot; source ~/.bash_profile ; cd /opt/tools/domain_control ; ./domain_control.sh stop all ; ./domain_control.sh start all &quot;" failonerror="true"/>
+
+		<echo message="Sleeping for 2 minutes"/>
+		<sleep minutes="2"/>
+	</target>
+
+	<!-- ***********************************************************************************
+	*********************************** FUNCTIONAL TESTS ***********************************
+	************************************************************************************ -->
+	<target name="run.func.tests" depends="define.func.variables,run.functional.tests" description="kick off jmeter functional jmeter tests" />
+	<target name="run.dev.smoke.tests" description="launch jmeter fucntional dev smoke tests">
+		<property name="func.jmx.includes" value="${dev.smoke.includes}"/>
+		<property name="func.jmx.excludes" value="${dev.smoke.excludes}"/>
+		<antcall target="run.func.tests"/>
+	</target>
+	<target name="run.e2e.tests" description="launch jmeter fucntional e2e tests">
+		<property name="func.jmx.includes" value="${e2e.includes}"/>
+		<property name="func.jmx.excludes" value="${e2e.excludes}"/>
+		<antcall target="run.func.tests"/>
+	</target>
+
+	<!--*******************************
+	****define functional variables****
+	******************************* -->
+	<target name="define.func.variables" depends="init" description="defines variables for functional tests">
+		<property name="test.type"			value="func"/>
+		<property name="jmeter.port"		value="4445"/>
+		<property name="jmeter.heap"		value="-Xmx512m"/>
+		<property name="constant.wait"		value="1"/>
+		<property name="num.threads"		value="1"/>
+		<property name="throughput"			value="0"/>
+		<property name="ramp.time"			value="1"/>
+		<property name="duration"			value="900"/>
+		<property name="loop"				value="1"/>
+		<property name="func.jmx.includes"	value="${functional.jmx.includes}"/>
+		<property name="func.jmx.excludes"	value="${functional.jmx.excludes}"/>
+		<property name="input.path"			value="${tests.dir}/input/"/>
+
+		<switch value="${environment}">
+			<case value="local">
+				<property name="userIdPrefix"	value="dev"/>
+				<fail message="You need to pass in -Dserver= parameter!">
+					<condition>
+						<not>
+							<isset property="server"/>
+						</not>
+					</condition>
+				</fail>
+				<fail message="You need to pass in -Dport= parameter!">
+					<condition>
+						<not>
+							<isset property="port"/>
+						</not>
+					</condition>
+				</fail>
+				<fail message="You need to pass in -Ddb.server= parameter!">
+					<condition>
+						<not>
+							<isset property="db.server"/>
+						</not>
+					</condition>
+				</fail>
+				<fail message="You need to pass in -Ddb.user= parameter!">
+					<condition>
+						<not>
+							<isset property="db.user"/>
+						</not>
+					</condition>
+				</fail>
+				<fail message="You need to pass in -Ddb.password= parameter!">
+					<condition>
+						<not>
+							<isset property="db.password"/>
+						</not>
+					</condition>
+				</fail>
+			</case>
+			<default>
+				<propertycopy name="server" 			from="${environment}.server"/>
+				<propertycopy name="port"				from="${environment}.port"/>
+				<propertycopy name="db.server"			from="${environment}.db.server"/>
+				<propertycopy name="db.user"			from="${environment}.db.user"/>
+				<propertycopy name="db.password"		from="${environment}.db.password"/>
+				<propertycopy name="db.id"				from="${environment}.db.id"/>
+				<propertycopy name="fitnesse.page"		from="${environment}.fitnesse.page"/>
+			</default>
+		</switch>
+
+		<echo message="      Environment ${environment}" />
+		<echo message="       Test Type: ${test.type}" />
+		<echo message="     JMeter Heap: ${jmeter.heap}" />
+		<echo message="   -Djmeter.port: ${jmeter.port}"/>
+		<echo message=" -Dconstant.wait: ${constant.wait}" />
+		<echo message="   -Dnum.threads: ${num.threads}" />
+		<echo message="    -Dthroughput: ${throughput} --- Keep this at zero" />
+		<echo message="     -Dramp.time: ${ramp.time}" />
+		<echo message="      -Dduration: ${duration}" />
+		<echo message="          -Dloop: ${loop}" />
+		<echo message="     Test Server: ${server}" />
+		<echo message="       Test Port: ${port}" />
+		<echo message="       DB server: ${db.server}" />
+		<echo message="         DB User: ${db.user}" />
+		<echo message="         DB Pass: ${db.password}" />
+		<echo message="   Fitnesse Page: ${fitnesse.page}" />
+		<echo message="      Input Path: ${input.path}" />
+		<echo message="    jmx Includes: ${func.jmx.includes}" />
+		<echo message="    jmx Excludes: ${func.jmx.excludes}" />
+	</target>
+
+	<!--**********************************
+	******run functional jmeter tests*****
+	***********************************-->
+	<target name="run.functional.tests" depends="clean.tmp.files" description="launch jmeter functional approved tests">
+		<property name="test.results" value="${jmeter.archive}/${project}.func.${test.type}.results.${touch.time}.jtl"/>
+		<property name="html.report" value="${jmeter.archive}/${project}.func.${test.type}.results.${touch.time}.html"/>
+		<jmeter
+			jmeterhome="${jmeter.home}"
+			resultlog="${test.results}"
+			failureproperty="failure-property">
+			<testplans dir="${tests.dir}" includes="${func.jmx.includes}" excludes="${func.jmx.excludes}"/>
+			<property name="jmeterengine.nongui.port" value="${jmeter.port}"/>
+			<property name="server" value="${server}"/>
+			<property name="port" value="${port}"/>
+			<property name="db-server" value="${db.server}"/>
+			<property name="db-user" value="${db.user}"/>
+			<property name="db-pass" value="${db.password}"/>
+			<property name="batch-server" value="${batch.server}"/>
+			<property name="batch-port" value="${batch.port}"/>
+			<property name="fitnesse-page" value="${fitnesse.page}"/>
+			<property name="input-path" value="${input.path}"/>
+			<jvmarg value="${jmeter.heap}"/>
+		</jmeter>
+
+		<xslt in="${test.results}"
+			out="${html.report}"
+			style="${utils}/jmeter-results-detail-report_21.xsl"/>
+
+		<if>
+			<equals arg1="${project}" arg2="ks.local"/>
+			<then>
+				<move file="${test.results}" tofile="${jmeter.results}/${environment}.${test.type}.results.${touch.time}.jtl"/>
+				<move file="${html.report}" tofile="${jmeter.results}/${environment}.${test.type}.results.${touch.time}.html"/>
+				<echo message=""/>
+				<echo message="***********************************"/>
+				<echo message="You can view your JMeter test results at ${jmeter.results}/${environment}.${test.type}.results.${touch.time}.html" />
+				<echo message="***********************************"/>
+			</then>
+			<else>
+				<copy file="${test.results}" tofile="${jmeter.results}/${environment}.${test.type}.results.jtl"/>
+				<copy file="${html.report}" tofile="${jmeter.results}/${environment}.${test.type}.results.html"/>
+			</else>
+		</if>
+
+		<if>
+			<equals arg1="${failure-property}" arg2="true" />
+			<then>
+				<echo message="JMeter build failed because one or more JMeter functional tests had a failed step!" />
+			</then>
+			<else>
+				<echo message="All JMeter functional test steps passed!" />
+			</else>
+		</if>
+	</target>
+</project>
