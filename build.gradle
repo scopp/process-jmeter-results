@@ -7,7 +7,11 @@ repositories {
 	mavenCentral()
 	maven {url 'http://dist.codehaus.org/mule/dependencies/maven2'}
 	maven {url 'http://repository.codehaus.org'}
-	maven {url 'http://repository.jboss.org/nexus/content/groups/public-jboss'}
+	maven {url 'https://maven-repository.dev.java.net/nonav/repository'}
+	maven {
+		url mavenCentral().url
+        artifactUrls 'http://repository.jboss.org/nexus/content/groups/public-jboss'
+    }
 }
 
 archivesBaseName = 'process-jmeter-results'
