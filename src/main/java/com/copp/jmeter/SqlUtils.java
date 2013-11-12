@@ -1,7 +1,5 @@
 package com.copp.jmeter;
 
-import com.copp.jmeter.PropertyUtils;
-
 import java.io.*;
 import java.sql.*;
 
