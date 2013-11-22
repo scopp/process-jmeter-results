@@ -17,6 +17,7 @@ import org.apache.log4j.Logger;
 /**
  * The Class ProcessJmeterResults.
  */
+//@Slf4j
 public class ProcessJmeterResults {
 	
 	/** The jmeter results file. */

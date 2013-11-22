@@ -3,44 +3,47 @@ apply plugin: 'maven'
 apply plugin: 'java'
 apply plugin: 'groovy'
 
-repositories {
-	mavenCentral()
-	maven {url 'http://dist.codehaus.org/mule/dependencies/maven2'}
-	maven {url 'http://repository.codehaus.org'}
-	maven {url 'https://maven-repository.dev.java.net/nonav/repository'}
-	maven {
-		url mavenCentral().url
-        artifactUrls 'http://repository.jboss.org/nexus/content/groups/public-jboss'
-    }
-}
-
 archivesBaseName = 'process-jmeter-results'
 
 sourceCompatibility = '1.6'
 
+repositories {
+    mavenCentral()
+    maven {url 'http://dist.codehaus.org/mule/dependencies/maven2'}
+    maven {url 'http://repository.codehaus.org'}
+    maven {url 'https://maven-repository.dev.java.net/nonav/repository'}
+    maven {
+        url mavenCentral().url
+        artifactUrls 'http://repository.jboss.org/nexus/content/groups/public-jboss'
+    }
+}
+
+sourceSets {
+    main {
+        resources {
+            srcDir projectDir
+            include 'conf/**'
+        }
+    }
+}
+
 dependencies {
-    //compile "org.slf4j:jcl-over-slf4j:${slf4j_version}"
-    //compile "org.slf4j:slf4j-api:${slf4j_version}"
+    compile "org.slf4j:slf4j-simple:${slf4j_version}"
 
 	compile "org.apache.commons:commons-math:${commons_math_version}"
 	compile "log4j:log4j:${log4j_version}"
 	compile "oracle:ojdbc14:10.2.0.2"
-	compile "javax.jms:jms:1.1"
 }
 
+jar {
+    from "conf/*"
+    from configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
 
-//
-// Upload/deployment configuration
-//
-
-task sourcesJar(type: Jar, dependsOn: classes) {
-	classifier = 'sources'
-	from sourceSets.main.allSource
-}
-
-
-artifacts {
-	archives sourcesJar
+    manifest {
+        attributes 'Specification-Version': project.version
+        attributes 'Created-By': 'Stephen Copp(TM) 2008'
+        attributes 'Main-Class': 'com.copp.jmeter.ProcessJmeterResults'
+    }
 }
 
 //*************************************************************************
