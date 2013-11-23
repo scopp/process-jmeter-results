@@ -29,7 +29,7 @@ sourceSets {
 
 dependencies {
     compile "org.slf4j:slf4j-simple:${slf4j_version}"
-
+    compile "org.codehaus.groovy:groovy-all:${groovy_version}"
 	compile "org.apache.commons:commons-math:${commons_math_version}"
 	compile "log4j:log4j:${log4j_version}"
 	compile "oracle:ojdbc14:10.2.0.2"
@@ -45,6 +45,112 @@ jar {
         attributes 'Main-Class': 'com.copp.jmeter.ProcessJmeterResults'
     }
 }
+
+ant {
+    property(file:"${projectDir}/conf/environment.properties")
+    property(file:"${projectDir}/conf/test.properties")
+}
+
+
+String timestamp = new Date().format('yyyyMMdd.HHmmss')
+File javaHome = file("${System.getenv('JAVA_HOME')}")
+File antHome = file("${System.getenv('ANT_HOME')}")
+File jmeterHome = file("${System.getenv('JMETER_HOME')}")
+File jmeterResults = file("${projectDir}/test.results")
+File jmeterArchive = file("${projectDir}/jmeter.archive")
+
+File srcDir = file("${projectDir}/src")
+File binDir = file("${projectDir}/bin")
+File libDir = file("${projectDir}/lib")
+File confDir = file("${projectDir}/conf")
+File scriptsDir = file("${projectDir}/scripts")
+File testsDir = file("${projectDir}/tests")
+File utilsDir = file("${projectDir}/utils")
+String lnpHost = "test01.stephencopp.com"
+
+String environment = "${System.getProperty('environment', "test")}"
+if (environment.isEmpty())
+    throw new GradleException("ERROR: You need to pass in -Denvironment= parameter.")
+
+println ""
+println "       Timestamp: ${timestamp}"
+println "  Gradle version: ${GradleVersion.current().version}"
+println "    Java version: ${org.gradle.internal.jvm.Jvm.current()}"
+println "       JAVA_HOME: ${javaHome}"
+println "        ANT_HOME: ${antHome}"
+println "     JMETER_HOME: ${jmeterHome}"
+println "  Jmeter Results: ${jmeterResults}"
+println "  Jmeter Archive: ${jmeterArchive}"
+println "         Scripts: ${scriptsDir}"
+println ""
+
+task definePerfVariables {
+    String testType = "perf"
+    String jmeterHeap = "-Xmx2048m"
+    String constantWait = "1500"
+    String numThreads = "75"
+    String throughput = "0"
+    String rampTime = "300"
+    String duration = "3600"
+    String loop = "-1"
+    String inputPath = "${testsDir}/input/"
+
+    String server = ant."${environment}.server"
+    String port = ant."${environment}.port"
+    String dbServer = ant."${environment}.db.server"
+    String dbUser = ant."${environment}.db.user"
+    String dbPassword = ant."${environment}.db.password"
+    String dbId = ant."${environment}.db.id"
+    String dbSnapshotUrl  = ant."${environment}.db.snapshot.url"
+    String fitnessePage  = ant."${environment}.fitnesse.page"
+
+    println "     Environment: ${environment}" 
+    println "       Test Type: ${testType}" 
+    println "     JMeter Heap: ${jmeterHeap}" 
+    println " -Dconstant.wait: ${constantWait}" 
+    println "   -Dnum.threads: ${numThreads}" 
+    println "    -Dthroughput: ${throughput} --- Keep this at zero" 
+    println "     -Dramp.time: ${rampTime}" 
+    println "      -Dduration: ${duration}" 
+    println "          -Dloop: ${loop}" 
+    println "     Test Server: ${server}"
+    println "       Test Port: ${port}" 
+    println "       DB server: ${dbServer}" 
+    println "         DB User: ${dbUser}" 
+    println "         DB Pass: ${dbPassword}" 
+    println "           DB Id: ${dbId}"
+    println " DB Snapshot URL: ${dbSnapshotUrl}"
+    println "   Fitnesse Page: ${fitnessePage}" 
+    println "      Input Path: ${inputPath}"
+    println ""
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 //*************************************************************************
 //
