@@ -2,16 +2,27 @@ apply plugin: 'idea'
 apply plugin: 'maven'
 apply plugin: 'java'
 apply plugin: 'groovy'
+apply plugin: 'jmeter'
 
 archivesBaseName = 'process-jmeter-results'
 
 sourceCompatibility = '1.6'
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "com.github.kulya:jmeter-gradle-plugin:${jmeter_gradle_version}"
+    }
+}
 
 repositories {
     mavenCentral()
     maven {url 'http://dist.codehaus.org/mule/dependencies/maven2'}
     maven {url 'http://repository.codehaus.org'}
     maven {url 'https://maven-repository.dev.java.net/nonav/repository'}
+    maven {url 'http://repo.kulya.info/content/groups/public'}
     maven {
         url mavenCentral().url
         artifactUrls 'http://repository.jboss.org/nexus/content/groups/public-jboss'
@@ -30,9 +41,9 @@ sourceSets {
 dependencies {
     compile "org.slf4j:slf4j-simple:${slf4j_version}"
     compile "org.codehaus.groovy:groovy-all:${groovy_version}"
-	compile "org.apache.commons:commons-math:${commons_math_version}"
-	compile "log4j:log4j:${log4j_version}"
-	compile "oracle:ojdbc14:10.2.0.2"
+    compile "org.apache.commons:commons-math:${commons_math_version}"
+    compile "log4j:log4j:${log4j_version}"
+    compile "oracle:ojdbc14:${ojdbc14_version}"
 }
 
 jar {
@@ -124,32 +135,6 @@ task definePerfVariables {
     println "      Input Path: ${inputPath}"
     println ""
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 //*************************************************************************
