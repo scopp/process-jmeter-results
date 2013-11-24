@@ -84,6 +84,7 @@ String throughput = "${System.getProperty('throughput', '0')}"
 String rampTime = "${System.getProperty('rampTime', '300')}"
 String duration = "${System.getProperty('duration', '3600')}"
 String loop = "${System.getProperty('loop', '-1')}"
+String testJmxFile = "${System.getProperty('testJmxFile', "*.jmx")}"
 
 //environment parameters
 String server = "${System.getProperty('server',ant."${env}.server")}"
@@ -105,6 +106,7 @@ println "        ANT_HOME: ${antHome}"
 println "     JMETER_HOME: ${jmeterHome}"
 println "        Test Dir: ${testsDir}"
 println "    Test Results: ${testResults}"
+println "Test File (.jmx): ${testJmxFile}"
 println "-----------------"
 println "     Environment: ${env}"
 println "       Test Type: ${testType}"
@@ -131,9 +133,9 @@ task JMeter << {
         }
     }
 
-    ant.jmeter(jmeterhome:"/opt/jmeter",
+    ant.jmeter(jmeterhome:"${jmeterHome}",
         resultlog:"${testResultLog}") {
-        testplans(includes:"*.jmx", dir:"${testsDir}")
+        testplans(includes:"${testJmxFile}", dir:"${testsDir}")
 
         jvmarg(value:"${jmeterHeap}")
         property(name:"server", value:"${server}")
