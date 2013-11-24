@@ -62,80 +62,93 @@ ant {
     property(file:"${projectDir}/conf/test.properties")
 }
 
-
-String timestamp = new Date().format('yyyyMMdd.HHmmss')
+//init parameters
+String timestamp = new Date().format('yyyyMMdd-HHmmss')
 File javaHome = file("${System.getenv('JAVA_HOME')}")
 File antHome = file("${System.getenv('ANT_HOME')}")
 File jmeterHome = file("${System.getenv('JMETER_HOME')}")
-File jmeterResults = file("${projectDir}/test.results")
-File jmeterArchive = file("${projectDir}/jmeter.archive")
-
-File srcDir = file("${projectDir}/src")
-File binDir = file("${projectDir}/bin")
-File libDir = file("${projectDir}/lib")
-File confDir = file("${projectDir}/conf")
-File scriptsDir = file("${projectDir}/scripts")
+File testResults = file("${projectDir}/test-results")
 File testsDir = file("${projectDir}/tests")
-File utilsDir = file("${projectDir}/utils")
+File confDir = file("${projectDir}/conf")
 String lnpHost = "test01.stephencopp.com"
+String env = "${System.getProperty('env', "")}"
+if (env.isEmpty())
+    throw new GradleException("ERROR: You need to pass in -Denv= parameter.")
 
-String environment = "${System.getProperty('environment', "test")}"
-if (environment.isEmpty())
-    throw new GradleException("ERROR: You need to pass in -Denvironment= parameter.")
+//test parameters
+String testType = "${System.getProperty('testType', 'perf')}"
+String jmeterHeap = "${System.getProperty('jmeterHeap', '-Xmx2048m')}"
+String constantWait = "${System.getProperty('constantWait', '1500')}"
+String numThreads = "${System.getProperty('numThreads', '75')}"
+String throughput = "${System.getProperty('throughput', '0')}"
+String rampTime = "${System.getProperty('rampTime', '300')}"
+String duration = "${System.getProperty('duration', '3600')}"
+String loop = "${System.getProperty('loop', '-1')}"
 
-println ""
+//environment parameters
+String server = "${System.getProperty('server',ant."${env}.server")}"
+String port = "${System.getProperty('port',ant."${env}.port")}"
+String dbServer = "${System.getProperty('dbServer',ant."${env}.db.server")}"
+String dbUser = "${System.getProperty('dbUser',ant."${env}.db.user")}"
+String dbPassword = "${System.getProperty('dbPassword',ant."${env}.db.password")}"
+String dbId = "${System.getProperty('dbId',ant."${env}.db.id")}"
+String dbSnapshotUrl = "${System.getProperty('dbSnapshotUrl',ant."${env}.db.snapshot.url")}"
+
+String testResultLog = "${testResults}/${env}-${testType}-${numThreads}users-${timestamp}.jtl"
+
+println "-----------------"
 println "       Timestamp: ${timestamp}"
 println "  Gradle version: ${GradleVersion.current().version}"
 println "    Java version: ${org.gradle.internal.jvm.Jvm.current()}"
 println "       JAVA_HOME: ${javaHome}"
 println "        ANT_HOME: ${antHome}"
 println "     JMETER_HOME: ${jmeterHome}"
-println "  Jmeter Results: ${jmeterResults}"
-println "  Jmeter Archive: ${jmeterArchive}"
-println "         Scripts: ${scriptsDir}"
-println ""
+println "        Test Dir: ${testsDir}"
+println "    Test Results: ${testResults}"
+println "-----------------"
+println "     Environment: ${env}"
+println "       Test Type: ${testType}"
+println "     JMeter Heap: ${jmeterHeap}"
+println " -Dconstant.wait: ${constantWait}"
+println "   -Dnum.threads: ${numThreads}"
+println "    -Dthroughput: ${throughput} --- Keep this at zero"
+println "     -Dramp.time: ${rampTime}"
+println "      -Dduration: ${duration}"
+println "          -Dloop: ${loop}"
+println "     Test Server: ${server}"
+println "       Test Port: ${port}"
+println "       DB server: ${dbServer}"
+println "         DB User: ${dbUser}"
+println "         DB Pass: ${dbPassword}"
+println "           DB Id: ${dbId}"
+println " DB Snapshot URL: ${dbSnapshotUrl}"
+println "Test Results Log: ${testResultLog}"
+println "-----------------"
 
-task definePerfVariables {
-    String testType = "perf"
-    String jmeterHeap = "-Xmx2048m"
-    String constantWait = "1500"
-    String numThreads = "75"
-    String throughput = "0"
-    String rampTime = "300"
-    String duration = "3600"
-    String loop = "-1"
-    String inputPath = "${testsDir}/input/"
+task JMeter << {
+    ant.taskdef( name:"jmeter",classname: "org.programmerplanet.ant.taskdefs.jmeter.JMeterTask") {
+        classpath { fileset(dir: "${jmeterHome}/lib", includes: 'ant-jmeter-1.1.1.jar')
+        }
+    }
 
-    String server = ant."${environment}.server"
-    String port = ant."${environment}.port"
-    String dbServer = ant."${environment}.db.server"
-    String dbUser = ant."${environment}.db.user"
-    String dbPassword = ant."${environment}.db.password"
-    String dbId = ant."${environment}.db.id"
-    String dbSnapshotUrl  = ant."${environment}.db.snapshot.url"
-    String fitnessePage  = ant."${environment}.fitnesse.page"
+    ant.jmeter(jmeterhome:"/opt/jmeter",
+        resultlog:"${testResultLog}") {
+        testplans(includes:"*.jmx", dir:"${testsDir}")
 
-    println "     Environment: ${environment}" 
-    println "       Test Type: ${testType}" 
-    println "     JMeter Heap: ${jmeterHeap}" 
-    println " -Dconstant.wait: ${constantWait}" 
-    println "   -Dnum.threads: ${numThreads}" 
-    println "    -Dthroughput: ${throughput} --- Keep this at zero" 
-    println "     -Dramp.time: ${rampTime}" 
-    println "      -Dduration: ${duration}" 
-    println "          -Dloop: ${loop}" 
-    println "     Test Server: ${server}"
-    println "       Test Port: ${port}" 
-    println "       DB server: ${dbServer}" 
-    println "         DB User: ${dbUser}" 
-    println "         DB Pass: ${dbPassword}" 
-    println "           DB Id: ${dbId}"
-    println " DB Snapshot URL: ${dbSnapshotUrl}"
-    println "   Fitnesse Page: ${fitnessePage}" 
-    println "      Input Path: ${inputPath}"
-    println ""
+        jvmarg(value:"${jmeterHeap}")
+        property(name:"server", value:"${server}")
+        property(name:"port", value:"${port}")
+        property(name:"db-server", value:"${dbServer}")
+        property(name:"db-user", value:"${dbUser}")
+        property(name:"db-pass", value:"${dbPassword}")
+        property(name:"duration", value:"${duration}")
+        property(name:"num-threads", value:"${numThreads}")
+        property(name:"constant-wait", value:"${constantWait}")
+        property(name:"throughput", value:"${throughput}")
+        property(name:"ramp-time", value:"${rampTime}")
+        property(name:"loop", value:"${loop}")
+    }
 }
-
 
 //*************************************************************************
 //

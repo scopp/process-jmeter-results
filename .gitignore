@@ -4,3 +4,5 @@ out/
 *.ipr
 *.iws
 build/
+tests/
+test-results/
