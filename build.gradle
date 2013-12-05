@@ -127,7 +127,7 @@ println " DB Snapshot URL: ${dbSnapshotUrl}"
 println "Test Results Log: ${testResultLog}"
 println "-----------------"
 
-task JMeter << {
+task jmeterLoadTest << {
     ant.taskdef( name:"jmeter",classname: "org.programmerplanet.ant.taskdefs.jmeter.JMeterTask") {
         classpath { fileset(dir: "${jmeterHome}/lib", includes: 'ant-jmeter-1.1.1.jar')
         }
